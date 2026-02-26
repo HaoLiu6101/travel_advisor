@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import os
 from collections import Counter
 from datetime import date, timedelta
 
 from .calendar_engine import generate_candidate_windows
-from .connectors.base import Connector
+from .connectors.base import Connector, ConnectorError
 from .models import SearchDebug, SearchRequest, SearchResponse
 from .pair_builder import build_itinerary_pairs
 from .scoring import rank_itineraries
@@ -29,12 +30,28 @@ class SearchService:
             make_up_workdays=set(request.make_up_workdays),
         )
 
+        warnings: list[str] = []
+        windows_to_evaluate = windows
+        if getattr(self.connector, "is_real_connector", False):
+            max_windows = _read_real_max_windows()
+            if len(windows) > max_windows:
+                windows_to_evaluate = windows[:max_windows]
+                warnings.append(
+                    f"Real connector window cap applied: evaluated first {max_windows} of {len(windows)} windows."
+                )
+
         dropped: Counter[str] = Counter()
         all_pairs = []
         route_profile = request.to_route_profile()
+        connector_failed = False
 
-        for window in windows:
-            fares = self.connector.search_fares(route_profile, window)
+        for window in windows_to_evaluate:
+            try:
+                fares = self.connector.search_fares(route_profile, window)
+            except ConnectorError as exc:
+                connector_failed = True
+                warnings.append(f"Connector error: {exc}")
+                break
             build_result = build_itinerary_pairs(fares)
             all_pairs.extend(build_result.pairs)
             dropped.update(build_result.dropped_reason_counts)
@@ -42,10 +59,9 @@ class SearchService:
         ranked = rank_itineraries(all_pairs, request.time_preferences)
         results = ranked[: request.result_limit]
 
-        warnings: list[str] = []
         if not windows:
             warnings.append("No candidate windows generated from current date rules.")
-        if windows and not results:
+        if windows and not results and not connector_failed:
             warnings.append("Candidate windows found but no itineraries matched pairing constraints.")
 
         debug = SearchDebug(
@@ -62,3 +78,14 @@ class SearchService:
 def request_month_range(request: SearchRequest) -> tuple[int, int]:
     min_s, max_s = request.date_window_months.split("-")
     return int(min_s), int(max_s)
+
+
+def _read_real_max_windows() -> int:
+    raw = os.getenv("TRAVEL_ADVISOR_REAL_MAX_WINDOWS")
+    if raw is None:
+        return 12
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return 12
+    return parsed if parsed > 0 else 12

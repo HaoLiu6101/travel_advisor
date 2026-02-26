@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from .connectors.sample import SampleConnector
+from .connectors.factory import build_connector_from_env
 from .models import SearchRequest, SearchResponse
 from .service import SearchService
 
 app = FastAPI(title="Travel Advisor MVP", version="0.1.0")
-service = SearchService(connector=SampleConnector())
+service = SearchService(connector=build_connector_from_env())
 
 
 @app.get("/health")

@@ -60,3 +60,28 @@ uv run travel-advisor search --profile changchun_weekend_plus
 ```bash
 uv run pytest
 ```
+
+## Real API Mode (Amadeus)
+
+Default connector mode is deterministic `sample`.
+
+To enable real fare search:
+
+```bash
+export TRAVEL_ADVISOR_CONNECTOR_MODE=amadeus
+export TRAVEL_ADVISOR_AMADEUS_CLIENT_ID=your_client_id
+export TRAVEL_ADVISOR_AMADEUS_CLIENT_SECRET=your_client_secret
+```
+
+Optional runtime tuning:
+
+```bash
+export TRAVEL_ADVISOR_AMADEUS_BASE_URL=https://test.api.amadeus.com
+export TRAVEL_ADVISOR_AMADEUS_TIMEOUT_SECONDS=12
+export TRAVEL_ADVISOR_AMADEUS_MAX_OFFERS_PER_LEG=5
+export TRAVEL_ADVISOR_REAL_MAX_WINDOWS=12
+```
+
+In `amadeus` mode, `/api/search` keeps the same response contract. If upstream/auth/rate-limit errors happen, the service returns `results: []` and includes connector warnings in `debug.warnings`.
+
+Note: official-airline APIs (for example China Southern NDC) are typically partner-gated and are intentionally deferred in this phase.

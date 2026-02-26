@@ -5,7 +5,7 @@ from pathlib import Path
 
 import typer
 
-from .connectors.sample import SampleConnector
+from .connectors.factory import build_connector_from_env
 from .models import SearchRequest
 from .profiles import request_from_profile
 from .service import SearchService
@@ -30,7 +30,7 @@ def search_command(
     else:
         request = request_from_profile(profile)
 
-    service = SearchService(connector=SampleConnector())
+    service = SearchService(connector=build_connector_from_env())
     response = service.search(request)
     result_json = response.model_dump_json(indent=2)
 
